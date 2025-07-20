@@ -149,6 +149,7 @@ import pandas as pd
 # In[16]:
 
 
+
 #df1.to_csv("arxiv_metadata_final.csv", index=False)
 #print("Saved arxiv_metadata_final.csv with clean lists as strings.")
 df1 = pd.read_csv("arxiv_metadata_final.csv")
@@ -342,6 +343,14 @@ print(batch_results[['query', 'title', 'distance']])
 
 # In[40]:
 
+from transformers import pipeline
+
+# Load summarization model once
+@st.cache_resource
+def load_summarizer():
+    return pipeline("summarization", model="facebook/bart-large-cnn")
+
+summarizer = load_summarizer()
 
 import streamlit as st
 
@@ -361,13 +370,21 @@ if st.button("Search"):
         # Display in Streamlit table
         #st.write(results[['query', 'title', 'authors', 'categories', 'distance']])
         # Loop over each result and display nicely
-        for i, row in results.iterrows():
-            st.markdown(f"### 🔹 {i+1}. {row['title']}")
-            st.markdown(f"**Authors:** {row['authors']}")
-            st.markdown(f"**Categories:** {row['categories']}")
-            st.markdown(f"**Distance:** {round(row['distance'], 4)}")
-            st.markdown(f"**Abstract:** {row['abstract']}")
-            st.markdown("---")
+       for i, row in results.iterrows():
+        st.markdown(f"### 🔹 {i+1}. {row['title']}")
+        st.markdown(f"**Authors:** {row['authors']}")
+        st.markdown(f"**Categories:** {row['categories']}")
+        st.markdown(f"**Distance:** {round(row['distance'], 4)}")
+        st.markdown(f"**Abstract:** {row['abstract']}")
+
+    # Add summarize button
+    if st.button(f"Summarize Abstract {i}"):
+        with st.spinner("Summarizing..."):
+            summary = summarizer(row['abstract'], max_length=60, min_length=20, do_sample=False)[0]['summary_text']
+            st.success(f"**Summary:** {summary}")
+
+    st.markdown("---")
+
 
     else:
         st.warning("Please enter at least one query.")
