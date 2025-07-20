@@ -371,21 +371,23 @@ if st.button("Search"):
         #st.write(results[['query', 'title', 'authors', 'categories', 'distance']])
         # Loop over each result and display nicely
        for i, row in results.iterrows():
-        st.markdown(f"### 🔹 {i+1}. {row['title']}")
-        st.markdown(f"**Authors:** {row['authors']}")
-        st.markdown(f"**Categories:** {row['categories']}")
-        st.markdown(f"**Distance:** {round(row['distance'], 4)}")
-        st.markdown(f"**Abstract:** {row['abstract']}")
+            st.markdown(f"### 🔹 {i+1}. {row['title']}")
+            st.markdown(f"**Authors:** {row['authors']}")
+            st.markdown(f"**Categories:** {row['categories']}")
+            st.markdown(f"**Distance:** {round(row['distance'], 4)}")
+            st.markdown(f"**Abstract:** {row['abstract']}")
 
-    # Add summarize button
-    if st.button(f"Summarize Abstract {i}"):
-        with st.spinner("Summarizing..."):
-            summary = summarizer(row['abstract'], max_length=60, min_length=20, do_sample=False)[0]['summary_text']
-            st.success(f"**Summary:** {summary}")
+            if st.button(f"Summarize Abstract {i}"):
+                with st.spinner("Summarizing..."):
+                    summary = summarizer(
+                        row['abstract'],
+                        max_length=60,
+                        min_length=20,
+                        do_sample=False
+                    )[0]['summary_text']
+                    st.success(f"**Summary:** {summary}")
 
-    st.markdown("---")
-
-
+            st.markdown("---")
     else:
         st.warning("Please enter at least one query.")
 
