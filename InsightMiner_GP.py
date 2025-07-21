@@ -370,7 +370,7 @@ if st.button("Search"):
         # Display in Streamlit table
         #st.write(results[['query', 'title', 'authors', 'categories', 'distance']])
         # Loop over each result and display nicely
-       for i, row in results.iterrows():
+        for i, row in results.iterrows():
             st.markdown(f"### 🔹 {i+1}. {row['title']}")
             st.markdown(f"**Authors:** {row['authors']}")
             st.markdown(f"**Categories:** {row['categories']}")
