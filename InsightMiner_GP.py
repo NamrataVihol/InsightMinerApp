@@ -342,7 +342,7 @@ print(batch_results[['query', 'title', 'distance']])
 
 
 # In[40]:
-
+import streamlit as st
 from transformers import pipeline
 
 # Load summarization model once
