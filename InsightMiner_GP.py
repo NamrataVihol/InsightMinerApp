@@ -377,7 +377,8 @@ if st.button("Search"):
             st.markdown(f"**Distance:** {round(row['distance'], 4)}")
             st.markdown(f"**Abstract:** {row['abstract']}")
 
-            if st.button(f"Summarize Abstract {i}"):
+            # Create a unique key for each button to avoid Streamlit conflict
+            if st.button(f"Summarize", key=f"sum_{i}"):
                 with st.spinner("Summarizing..."):
                     summary = summarizer(
                         row['abstract'],
@@ -388,6 +389,7 @@ if st.button("Search"):
                     st.success(f"**Summary:** {summary}")
 
             st.markdown("---")
+
     else:
         st.warning("Please enter at least one query.")
 
