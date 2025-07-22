@@ -352,7 +352,7 @@ def load_summarizer():
 
 summarizer = load_summarizer()
 
-import streamlit as st
+#import streamlit as st
 
 # Streamlit UI layout
 st.title("InsightMiner: Academic Paper Search")
