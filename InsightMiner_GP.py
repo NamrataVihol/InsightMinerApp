@@ -186,7 +186,7 @@ df1['combined_text'].head()
 # In[24]:
 
 def load_model():
-    return SentenceTransformer("all-MiniLM-L6-v2", device="cpu", trust_remote_code=True)
+    return SentenceTransformer("all-MiniLM-L6-v2")
 # Load SentenceTransformer model
 # model = SentenceTransformer('all-MiniLM-L6-v2')
 model = load_model()
