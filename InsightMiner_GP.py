@@ -70,7 +70,7 @@ if st.button("Search"):
         if queries:
             try:
                 start = time.time()
-                results = batch_search(model, index, df)
+                results = batch_search(minilm_model, index, df)
                 end = time.time()
                 st.success(f"🔍 Search completed in {round(end - start, 2)} seconds.")
 
