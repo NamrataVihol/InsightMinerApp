@@ -63,42 +63,39 @@ query_input = st.text_area("Enter one or more search queries (one per line):")
 top_k = st.slider("Number of top results:", 1, 10, 3)
 
 if st.button("Search"):
-    if query_input.strip():
-        queries = query_input.strip().split('\n')
-        results = batch_search(queries, top_k=top_k)
+    raw_input = query_input.strip()
+    if raw_input:
+        queries = [q.strip() for q in raw_input.split('\n') if q.strip()]
 
-        #Store in session to preserve after button click
-        st.session_state['last_results'] = results
-        st.session_state['queries'] = queries
+        if queries:
+            try:
+                start = time.time()
+                results = batch_search(queries, top_k=top_k)
+                end = time.time()
+                st.success(f"🔍 Search completed in {round(end - start, 2)} seconds.")
+
+                for i, row in results.iterrows():
+                    st.markdown(f"### {i+1}. {row['title']}")
+                    st.markdown(f"**Authors:** {row['authors']}")
+                    st.markdown(f"**Categories:** {row['categories']}")
+                    st.markdown(f"**Distance:** {round(row['distance'], 4)}")
+                    st.markdown(f"**Abstract:** {row['abstract']}")
+
+                    if st.button("Summarize", key=f"sum_{i}"):
+                        with st.spinner("Summarizing..."):
+                            summary = summarizer(
+                                row['abstract'], max_length=60, min_length=20, do_sample=False
+                            )[0]['summary_text']
+                            st.success(f"**Summary:** {summary}")
+
+                    st.markdown("---")
+
+            except Exception as e:
+                st.error(f"Error during search: {e}")
+        else:
+            st.warning("Please enter at least one valid query.")
     else:
-        st.warning("Please enter at least one query.")
-
-#Render stored results even after re-run
-if 'last_results' in st.session_state:
-    results = st.session_state['last_results']
-    queries = st.session_state.get('queries', [])
-
-    for i, row in results.iterrows():
-        st.markdown(f"### 🔹 {i+1}. {row['title']}")
-        st.markdown(f"**Authors:** {row['authors']}")
-        st.markdown(f"**Categories:** {row['categories']}")
-        st.markdown(f"**Distance:** {round(row['distance'], 4)}")
-        st.markdown(f"**Abstract:** {row['abstract']}")
-
-        if st.button(f"Summarize", key=f"sum_{i}"):
-            with st.spinner("Summarizing..."):
-                summary = summarizer(
-                    row['abstract'],
-                    max_length=60,
-                    min_length=20,
-                    do_sample=False
-                )[0]['summary_text']
-                st.success(f"**Summary:** {summary}")
-
-        st.markdown("---")
-
-    else:
-        st.warning("Please enter a query to search.")
+        st.warning("Please enter a query above.")
 
 # --------- Section 2: Compare Models ----------
 st.header("📊 Compare Embedding Models")
