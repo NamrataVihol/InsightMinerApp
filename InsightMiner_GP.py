@@ -28,7 +28,7 @@ def load_summarizer():
     return pipeline("summarization", model="facebook/bart-large-cnn")
 
 # ============ Core Functions ============
-
+df = load_dataframe()
 def search_papers(query, model, index, df, top_k=5):
     query_embedding = model.encode([query]).astype("float32")
     D, I = index.search(query_embedding, k=top_k)
