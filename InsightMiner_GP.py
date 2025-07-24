@@ -65,20 +65,38 @@ top_k = st.slider("Number of top results:", 1, 10, 3)
 if st.button("Search"):
     if query_input.strip():
         queries = query_input.strip().split('\n')
-        results = batch_search(queries, minilm_model, index, df, top_k=top_k)
+        results = batch_search(queries, top_k=top_k)
 
-        for i, row in results.iterrows():
-            st.markdown(f"### 🔹 {i+1}. {row['title']}")
-            st.markdown(f"**Authors:** {row['authors']}")
-            st.markdown(f"**Categories:** {row['categories']}")
-            st.markdown(f"**Distance:** {round(row['distance'], 4)}")
-            st.markdown(f"**Abstract:** {row['abstract']}")
+        #Store in session to preserve after button click
+        st.session_state['last_results'] = results
+        st.session_state['queries'] = queries
+    else:
+        st.warning("Please enter at least one query.")
 
-            if st.button("Summarize", key=f"sum_{i}"):
-                with st.spinner("Generating summary..."):
-                    summary = summarizer(row['abstract'], max_length=60, min_length=20, do_sample=False)[0]['summary_text']
-                    st.success(f"**Summary:** {summary}")
-            st.markdown("---")
+#Render stored results even after re-run
+if 'last_results' in st.session_state:
+    results = st.session_state['last_results']
+    queries = st.session_state.get('queries', [])
+
+    for i, row in results.iterrows():
+        st.markdown(f"### 🔹 {i+1}. {row['title']}")
+        st.markdown(f"**Authors:** {row['authors']}")
+        st.markdown(f"**Categories:** {row['categories']}")
+        st.markdown(f"**Distance:** {round(row['distance'], 4)}")
+        st.markdown(f"**Abstract:** {row['abstract']}")
+
+        if st.button(f"Summarize", key=f"sum_{i}"):
+            with st.spinner("Summarizing..."):
+                summary = summarizer(
+                    row['abstract'],
+                    max_length=60,
+                    min_length=20,
+                    do_sample=False
+                )[0]['summary_text']
+                st.success(f"**Summary:** {summary}")
+
+        st.markdown("---")
+
     else:
         st.warning("Please enter a query to search.")
 
