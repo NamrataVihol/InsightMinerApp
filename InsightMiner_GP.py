@@ -1,12 +1,12 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import faiss
 import time
 from sentence_transformers import SentenceTransformer
+from transformers import pipeline
 
-# Load data
+# ============ Caching Resources ============
 @st.cache_data
 def load_dataframe():
     return pd.read_csv("arxiv_metadata_final.csv")
@@ -15,99 +15,97 @@ def load_dataframe():
 def load_faiss_index():
     return faiss.read_index("arxiv_10000_faiss.index")
 
-# Dictionary of model names
-model_names = {
-    "MiniLM-L6-v2": "all-MiniLM-L6-v2",
-    "Paraphrase-MiniLM": "paraphrase-MiniLM-L6-v2",
-    "QA-MiniLM": "multi-qa-MiniLM-L6-dot-v1"
-}
-
-df = load_dataframe()
-index = load_faiss_index()
-
-# Create combined_text column if not present
-if "combined_text" not in df.columns:
-    df["combined_text"] = df["title"].astype(str) + " " + df["abstract"].astype(str)
-
-# ---------------------- Streamlit Layout -------------------------
-
-st.title("InsightMiner: Academic Paper Search + Model Comparison")
-
-st.markdown("### 🔍 Single/Batch Paper Search")
-
-query_input = st.text_area("Enter one or more search queries (one per line):")
-top_k = st.slider("Number of results per query:", 1, 10, 3)
-
-# Load default model
 @st.cache_resource
-def load_default_model():
-    return SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+def load_minilm_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
 
-model = load_default_model()
+@st.cache_resource
+def load_paraphrase_model():
+    return SentenceTransformer("paraphrase-MiniLM-L6-v2")
 
-def batch_search(queries, top_k=5):
-    query_embeddings = model.encode(queries).astype("float32")
+@st.cache_resource
+def load_summarizer():
+    return pipeline("summarization", model="facebook/bart-large-cnn")
+
+# ============ Core Functions ============
+
+def search_papers(query, model, index, df, top_k=5):
+    query_embedding = model.encode([query]).astype("float32")
+    D, I = index.search(query_embedding, k=top_k)
+    results = df.iloc[I[0]].copy()
+    results["distance"] = D[0]
+    return results
+
+def batch_search(queries, model, index, df, top_k=5):
     all_results = []
-
+    query_embeddings = model.encode(queries).astype("float32")
     for i, query in enumerate(queries):
         D, I = index.search(query_embeddings[i:i+1], k=top_k)
         results = df.iloc[I[0]].copy()
         results["distance"] = D[0]
         results["query"] = query
         all_results.append(results)
-
     return pd.concat(all_results).reset_index(drop=True)
+
+# ============ Load Data/Models ============
+df = load_dataframe()
+index = load_faiss_index()
+minilm_model = load_minilm_model()
+paraphrase_model = load_paraphrase_model()
+summarizer = load_summarizer()
+
+# ============ Streamlit UI ============
+st.title("📚 InsightMiner: Academic Paper Explorer")
+
+# --------- Section 1: Search ----------
+st.header("🔍 Search Papers")
+query_input = st.text_area("Enter one or more search queries (one per line):")
+top_k = st.slider("Number of top results:", 1, 10, 3)
 
 if st.button("Search"):
     if query_input.strip():
-        queries = query_input.strip().split("\n")
-        results = batch_search(queries, top_k=top_k)
+        queries = query_input.strip().split('\n')
+        results = batch_search(queries, minilm_model, index, df, top_k=top_k)
 
         for i, row in results.iterrows():
             st.markdown(f"### 🔹 {i+1}. {row['title']}")
             st.markdown(f"**Authors:** {row['authors']}")
             st.markdown(f"**Categories:** {row['categories']}")
             st.markdown(f"**Distance:** {round(row['distance'], 4)}")
-            st.markdown(f"**Abstract:** {row['abstract'][:500]}...")
+            st.markdown(f"**Abstract:** {row['abstract']}")
+
+            if st.button("Summarize", key=f"sum_{i}"):
+                with st.spinner("Generating summary..."):
+                    summary = summarizer(row['abstract'], max_length=60, min_length=20, do_sample=False)[0]['summary_text']
+                    st.success(f"**Summary:** {summary}")
             st.markdown("---")
     else:
-        st.warning("Please enter at least one query.")
+        st.warning("Please enter a query to search.")
 
-# ---------------------- Comparison Section -------------------------
+# --------- Section 2: Compare Models ----------
+st.header("📊 Compare Embedding Models")
+comp_query = st.text_input("Query to Compare MiniLM vs Paraphrase-MiniLM:")
+compare_k = st.slider("Top K results to compare:", 1, 10, 3)
 
-st.markdown("---")
-st.markdown("## 🧪 Compare Embedding Models")
+if st.button("Compare Models"):
+    if comp_query.strip():
+        with st.spinner("Running model comparisons..."):
+            start_time = time.time()
+            results_minilm = search_papers(comp_query, minilm_model, index, df, top_k=compare_k)
+            time_minilm = time.time() - start_time
 
-with st.expander("🔬 Run Comparison"):
-    selected_models = st.multiselect("Choose models to compare", list(model_names.keys()), default=["MiniLM-L6-v2"])
-    compare_query = st.text_input("Enter a search query for comparison:")
-    compare_k = st.slider("Top results per model:", 1, 10, 3)
+            start_time = time.time()
+            results_para = search_papers(comp_query, paraphrase_model, index, df, top_k=compare_k)
+            time_para = time.time() - start_time
 
-    if st.button("Compare Now"):
-        if not compare_query.strip():
-            st.warning("Please enter a query to compare.")
-        else:
-            for label in selected_models:
-                st.markdown(f"### 🔹 Results from `{label}`")
-                try:
-                    with st.spinner(f"Loading {label}..."):
-                        model = SentenceTransformer(model_names[label])
-                        start = time.time()
-                        query_embed = model.encode([compare_query])
-                        doc_embeds = model.encode(df["combined_text"].tolist())
-                        faiss_index = faiss.IndexFlatL2(doc_embeds.shape[1])
-                        faiss_index.add(np.array(doc_embeds).astype("float32"))
-                        D, I = faiss_index.search(np.array(query_embed).astype("float32"), k=compare_k)
-                        end = time.time()
+        st.subheader("MiniLM-L6-v2 Results")
+        for i, row in results_minilm.iterrows():
+            st.markdown(f"🔹 {row['title']} ({round(row['distance'], 4)})")
 
-                        results = df.iloc[I[0]].copy()
-                        st.markdown(f"🕒 **Search Time:** {end - start:.2f} seconds")
-                        st.markdown(f"📊 **Avg Distance Score:** {np.mean(D[0]):.4f}")
+        st.subheader("Paraphrase-MiniLM-L6-v2 Results")
+        for i, row in results_para.iterrows():
+            st.markdown(f"🔹 {row['title']} ({round(row['distance'], 4)})")
 
-                        for j, row in results.iterrows():
-                            st.markdown(f"**{j+1}. {row['title']}**")
-                            st.markdown(f"*{row['authors']}* — `{row['categories']}`")
-                            st.markdown(f"`Abstract:` {row['abstract'][:300]}...")
-                            st.markdown("---")
-                except Exception as e:
-                    st.error(f"❌ Error with {label}: {str(e)}")
+        st.info(f"⏱️ Time Taken: MiniLM = {time_minilm:.2f}s | Paraphrase-MiniLM = {time_para:.2f}s")
+    else:
+        st.warning("Please enter a query to compare models.")
