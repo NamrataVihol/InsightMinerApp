@@ -81,10 +81,13 @@ if st.button("Search"):
                     st.markdown(f"**Distance:** {round(row['distance'], 4)}")
                     st.markdown(f"**Abstract:** {row['abstract']}")
 
-                    if st.button("Summarize", key=f"sum_{i}"):
+                    if st.button(f"Summarize {i}", key=f"sum_{i}"):
                         with st.spinner("Summarizing..."):
                             summary = summarizer(
-                                row['abstract'], max_length=60, min_length=20, do_sample=False
+                                row['abstract'], 
+                                max_length=60, 
+                                min_length=20, 
+                                do_sample=False
                             )[0]['summary_text']
                             st.success(f"**Summary:** {summary}")
 
