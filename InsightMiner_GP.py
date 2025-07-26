@@ -77,28 +77,35 @@ if st.button("Search"):
                 st.session_state['last_results'] = results
                 end = time.time()
                 st.success(f"🔍 Search completed in {round(end - start, 2)} seconds.")
+            except Exception as e:
+                st.error(f"Error during search: {e}")
+        else:
+            st.warning("Please enter at least one valid query.")
+    else:
+        st.warning("Please enter a query above.")
 
-            if 'last_results' in st.session_state:
-                results = st.session_state['last_results']
-                
-                for i, row in results.iterrows():
-                    st.markdown(f"### {i+1}. {row['title']}")
-                    st.markdown(f"**Authors:** {row['authors']}")
-                    st.markdown(f"**Categories:** {row['categories']}")
-                    st.markdown(f"**Distance:** {round(row['distance'], 4)}")
-                    st.markdown(f"**Abstract:** {row['abstract']}")
+# ✅ Always render results after rerun
+if 'last_results' in st.session_state:
+    results = st.session_state['last_results']
+    for i, row in results.iterrows():
+        st.markdown(f"### {i+1}. {row['title']}")
+        st.markdown(f"**Authors:** {row['authors']}")
+        st.markdown(f"**Categories:** {row['categories']}")
+        st.markdown(f"**Distance:** {round(row['distance'], 4)}")
+        st.markdown(f"**Abstract:** {row['abstract']}")
 
-                    if st.button(f"Summarize", key=f"sum_{i}"):
-                        with st.spinner("Summarizing..."):
-                            summary = summarizer(
-                                row['abstract'], 
-                                max_length=60, 
-                                min_length=20, 
-                                do_sample=False
-                            )[0]['summary_text']
-                            st.success(f"**Summary:** {summary}")
+        if st.button(f"Summarize", key=f"sum_{i}"):
+            with st.spinner("Summarizing..."):
+                summary = summarizer(
+                    row['abstract'], 
+                    max_length=60, 
+                    min_length=20, 
+                    do_sample=False
+                )[0]['summary_text']
+                st.success(f"**Summary:** {summary}")
 
-                    st.markdown("---")
+        st.markdown("---")
+
 
             except Exception as e:
                 st.error(f"Error during search: {e}")
