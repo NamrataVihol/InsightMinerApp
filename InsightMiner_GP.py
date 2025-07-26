@@ -106,14 +106,6 @@ if 'last_results' in st.session_state:
 
         st.markdown("---")
 
-
-            except Exception as e:
-                st.error(f"Error during search: {e}")
-        else:
-            st.warning("Please enter at least one valid query.")
-    else:
-        st.warning("Please enter a query above.")
-
 # --------- Section 2: Compare Models ----------
 st.header("📊 Compare Embedding Models")
 comp_query = st.text_input("Query to Compare MiniLM vs Paraphrase-MiniLM:")
