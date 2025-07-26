@@ -54,6 +54,9 @@ minilm_model = load_minilm_model()
 paraphrase_model = load_paraphrase_model()
 summarizer = load_summarizer()
 
+if "menu" not in st.session_state:
+    st.session_state["menu"] = "🔍 Search Papers"
+
 # ============ Streamlit UI ============
 st.title("📚 InsightMiner: Academic Paper Explorer")
 
@@ -71,9 +74,13 @@ if st.button("Search"):
             try:
                 start = time.time()
                 results = batch_search(queries, minilm_model, index, df, top_k=top_k)
+                st.session_state['last_results'] = results
                 end = time.time()
                 st.success(f"🔍 Search completed in {round(end - start, 2)} seconds.")
 
+            if 'last_results' in st.session_state:
+                results = st.session_state['last_results']
+                
                 for i, row in results.iterrows():
                     st.markdown(f"### {i+1}. {row['title']}")
                     st.markdown(f"**Authors:** {row['authors']}")
@@ -81,7 +88,7 @@ if st.button("Search"):
                     st.markdown(f"**Distance:** {round(row['distance'], 4)}")
                     st.markdown(f"**Abstract:** {row['abstract']}")
 
-                    if st.button(f"Summarize {i}", key=f"sum_{i}"):
+                    if st.button(f"Summarize", key=f"sum_{i}"):
                         with st.spinner("Summarizing..."):
                             summary = summarizer(
                                 row['abstract'], 
