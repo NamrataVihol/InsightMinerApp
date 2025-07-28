@@ -111,6 +111,16 @@ if menu == "🔍 Search Papers":
                     st.success(f"**Summary:** {summary}")
             st.markdown("---")
 
+        # CSV Download button
+        if not results.empty:
+            csv = results.to_csv(index=False)
+            st.download_button(
+                label="⬇️ Download Results as CSV",
+                data=csv,
+                file_name="search_results.csv",
+                mime="text/csv"
+    )
+
 # ------------------------- Model Comparison -------------------------
 elif menu == "📊 Compare Embedding Models":
     st.title("📊 Compare Embedding Models")
