@@ -17,7 +17,7 @@ def load_model2():
 
 @st.cache_resource
 def load_faiss_index():
-    return faiss.read_index("arxiv_10000_faiss.index")
+    return faiss.read_index("topic_9_faiss.index")
 
 @st.cache_data
 def load_dataframe():
@@ -48,15 +48,15 @@ if menu == "🔍 Search Papers":
     st.title("📚 InsightMiner: Academic Paper Explorer")
     st.header("🔍 Search Papers")
 
+    # Select topic
+    #selected_topic = st.sidebar.selectbox("Select topic:", list(range(10)))
+
+    # Load topic-specific data and FAISS index
+    #df = load_dataframe(selected_topic)
+    #index = load_faiss_index(selected_topic)
+
     query_input = st.text_area("Enter one or more search queries (one per line):")
     top_k = st.slider("Number of top results:", 1, 10, 3)
-
-    # Topic Filter
-    topics = sorted(df["topic"].unique())
-    selected_topic = st.sidebar.selectbox("Filter by topic:", ["All"] + [str(t) for t in topics])
-    filtered_df = df.copy()
-    if selected_topic != "All":
-        filtered_df = filtered_df[filtered_df["topic"].astype(str) == selected_topic]
 
     if st.button("Search"):
         raw_input = query_input.strip()
@@ -116,6 +116,10 @@ elif menu == "📊 Compare Embedding Models":
     st.title("📊 Compare Embedding Models")
     query = st.text_input("Enter a single query to compare:", value="machine learning for healthcare")
     top_k = st.slider("Top results:", 1, 10, 5)
+
+    # Use topic 9 by default for comparison
+    #df = load_dataframe(9)
+    #index = load_faiss_index(9)
 
     if st.button("Compare"):
         with st.spinner("Running comparisons..."):
