@@ -1,135 +1,149 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import faiss
 import time
 from sentence_transformers import SentenceTransformer
+import faiss
 from transformers import pipeline
 
-# ============ Caching Resources ============
-@st.cache_data
-def load_dataframe():
-    return pd.read_csv("arxiv_metadata_final.csv")
+# ------------------------- Load Resources -------------------------
+@st.cache_resource
+def load_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+@st.cache_resource
+def load_model2():
+    return SentenceTransformer("paraphrase-MiniLM-L6-v2")
 
 @st.cache_resource
 def load_faiss_index():
     return faiss.read_index("arxiv_10000_faiss.index")
 
-@st.cache_resource
-def load_minilm_model():
-    return SentenceTransformer("all-MiniLM-L6-v2")
-
-@st.cache_resource
-def load_paraphrase_model():
-    return SentenceTransformer("paraphrase-MiniLM-L6-v2")
+@st.cache_data
+def load_dataframe():
+    return pd.read_csv("arxiv_enriched.csv")
 
 @st.cache_resource
 def load_summarizer():
     return pipeline("summarization", model="facebook/bart-large-cnn")
 
-# ============ Core Functions ============
-df = load_dataframe()
-def search_papers(query, model, index, df, top_k=5):
-    query_embedding = model.encode([query]).astype("float32")
-    D, I = index.search(query_embedding, k=top_k)
-    results = df.iloc[I[0]].copy()
-    results["distance"] = D[0]
-    return results
-
-def batch_search(queries, model, index, df, top_k=5):
-    all_results = []
-    query_embeddings = model.encode(queries).astype("float32")
-    for i, query in enumerate(queries):
-        D, I = index.search(query_embeddings[i:i+1], k=top_k)
-        results = df.iloc[I[0]].copy()
-        results["distance"] = D[0]
-        results["query"] = query
-        all_results.append(results)
-    return pd.concat(all_results).reset_index(drop=True)
-
-# ============ Load Data/Models ============
-df = load_dataframe()
+model = load_model()
 index = load_faiss_index()
-minilm_model = load_minilm_model()
-paraphrase_model = load_paraphrase_model()
+df = load_dataframe()
 summarizer = load_summarizer()
 
+# -------------- Navigation Menu --------------
 if "menu" not in st.session_state:
     st.session_state["menu"] = "🔍 Search Papers"
 
-# ============ Streamlit UI ============
-st.title("📚 InsightMiner: Academic Paper Explorer")
+menu = st.sidebar.radio(
+    "Go to",
+    ["🔍 Search Papers", "📊 Compare Embedding Models"],
+    index=["🔍 Search Papers", "📊 Compare Embedding Models"].index(st.session_state["menu"])
+)
+st.session_state["menu"] = menu
 
-# --------- Section 1: Search ----------
-st.header("🔍 Search Papers")
-query_input = st.text_area("Enter one or more search queries (one per line):")
-top_k = st.slider("Number of top results:", 1, 10, 3)
+# ------------------------- Search Papers -------------------------
+if menu == "🔍 Search Papers":
+    st.title("📚 InsightMiner: Academic Paper Explorer")
+    st.header("🔍 Search Papers")
 
-if st.button("Search"):
-    raw_input = query_input.strip()
-    if raw_input:
-        queries = [q.strip() for q in raw_input.split('\n') if q.strip()]
+    query_input = st.text_area("Enter one or more search queries (one per line):")
+    top_k = st.slider("Number of top results:", 1, 10, 3)
 
-        if queries:
-            try:
-                start = time.time()
-                results = batch_search(queries, minilm_model, index, df, top_k=top_k)
-                st.session_state['last_results'] = results
-                end = time.time()
-                st.success(f"🔍 Search completed in {round(end - start, 2)} seconds.")
-            except Exception as e:
-                st.error(f"Error during search: {e}")
+    # Topic Filter
+    topics = sorted(df["topic"].unique())
+    selected_topic = st.sidebar.selectbox("Filter by topic:", ["All"] + [str(t) for t in topics])
+    filtered_df = df.copy()
+    if selected_topic != "All":
+        filtered_df = filtered_df[filtered_df["topic"].astype(str) == selected_topic]
+
+    if st.button("Search"):
+        raw_input = query_input.strip()
+        if raw_input:
+            queries = [q.strip() for q in raw_input.split('\n') if q.strip()]
+
+            if queries:
+                try:
+                    start = time.time()
+                    results = []
+                    from sentence_transformers.util import cos_sim
+                    query_embeddings = model.encode(queries).astype('float32')
+
+                    for i, query_emb in enumerate(query_embeddings):
+                        D, I = index.search(np.array([query_emb]), k=top_k)
+                        batch = filtered_df.iloc[I[0]].copy()
+                        batch['distance'] = D[0]
+                        batch['query'] = queries[i]
+                        results.append(batch)
+
+                    results = pd.concat(results).reset_index(drop=True)
+                    st.session_state['last_results'] = results
+                    end = time.time()
+                    st.success(f"🔍 Search completed in {round(end - start, 2)} seconds.")
+                except Exception as e:
+                    st.error(f"Error during search: {e}")
+            else:
+                st.warning("Please enter at least one valid query.")
         else:
-            st.warning("Please enter at least one valid query.")
-    else:
-        st.warning("Please enter a query above.")
+            st.warning("Please enter a query above.")
 
-# ✅ Always render results after rerun
-if 'last_results' in st.session_state:
-    results = st.session_state['last_results']
-    for i, row in results.iterrows():
-        st.markdown(f"### {i+1}. {row['title']}")
-        st.markdown(f"**Authors:** {row['authors']}")
-        st.markdown(f"**Categories:** {row['categories']}")
-        st.markdown(f"**Distance:** {round(row['distance'], 4)}")
-        st.markdown(f"**Abstract:** {row['abstract']}")
+    # Show previous results after rerun
+    if 'last_results' in st.session_state:
+        results = st.session_state['last_results']
+        for i, row in results.iterrows():
+            st.markdown(f"### 🔹 {i+1}. {row['title']}")
+            st.markdown(f"**Authors:** {row['authors']}")
+            st.markdown(f"**Categories:** {row['categories']}")
+            st.markdown(f"**Keywords:** {row['keywords']}")
+            st.markdown(f"**Topic:** {row['topic']}")
+            st.markdown(f"**Distance:** {round(row['distance'], 4)}")
+            st.markdown(f"**Abstract:** {row['abstract']}")
 
-        if st.button(f"Summarize", key=f"sum_{i}"):
-            with st.spinner("Summarizing..."):
-                summary = summarizer(
-                    row['abstract'], 
-                    max_length=60, 
-                    min_length=20, 
-                    do_sample=False
-                )[0]['summary_text']
-                st.success(f"**Summary:** {summary}")
+            if st.button(f"Summarize", key=f"sum_{i}"):
+                with st.spinner("Summarizing..."):
+                    summary = summarizer(
+                        row['abstract'],
+                        max_length=60,
+                        min_length=20,
+                        do_sample=False
+                    )[0]['summary_text']
+                    st.success(f"**Summary:** {summary}")
+            st.markdown("---")
 
-        st.markdown("---")
+# ------------------------- Model Comparison -------------------------
+elif menu == "📊 Compare Embedding Models":
+    st.title("📊 Compare Embedding Models")
+    query = st.text_input("Enter a single query to compare:", value="machine learning for healthcare")
+    top_k = st.slider("Top results:", 1, 10, 5)
 
-# --------- Section 2: Compare Models ----------
-st.header("📊 Compare Embedding Models")
-comp_query = st.text_input("Query to Compare MiniLM vs Paraphrase-MiniLM:")
-compare_k = st.slider("Top K results to compare:", 1, 10, 3)
+    if st.button("Compare"):
+        with st.spinner("Running comparisons..."):
+            start = time.time()
+            query_emb1 = model.encode([query]).astype('float32')
+            D1, I1 = index.search(query_emb1, k=top_k)
+            results1 = df.iloc[I1[0]].copy()
+            results1['distance'] = D1[0]
+            t1 = time.time() - start
 
-if st.button("Compare Models"):
-    if comp_query.strip():
-        with st.spinner("Running model comparisons..."):
-            start_time = time.time()
-            results_minilm = search_papers(comp_query, minilm_model, index, df, top_k=compare_k)
-            time_minilm = time.time() - start_time
+            start = time.time()
+            model_2 = load_model2()
+            query_emb2 = model_2.encode([query]).astype('float32')
+            D2, I2 = index.search(query_emb2, k=top_k)
+            results2 = df.iloc[I2[0]].copy()
+            results2['distance'] = D2[0]
+            t2 = time.time() - start
 
-            start_time = time.time()
-            results_para = search_papers(comp_query, paraphrase_model, index, df, top_k=compare_k)
-            time_para = time.time() - start_time
+        st.subheader("MiniLM-L6-v2")
+        for i, row in results1.iterrows():
+            st.markdown(f"**{i+1}. {row['title']}**")
+            st.markdown(f"Distance: {round(row['distance'], 4)}")
+            st.markdown("---")
 
-        st.subheader("MiniLM-L6-v2 Results")
-        for i, row in results_minilm.iterrows():
-            st.markdown(f"🔹 {row['title']} ({round(row['distance'], 4)})")
+        st.subheader("Paraphrase-MiniLM-L6-v2")
+        for i, row in results2.iterrows():
+            st.markdown(f"**{i+1}. {row['title']}**")
+            st.markdown(f"Distance: {round(row['distance'], 4)}")
+            st.markdown("---")
 
-        st.subheader("Paraphrase-MiniLM-L6-v2 Results")
-        for i, row in results_para.iterrows():
-            st.markdown(f"🔹 {row['title']} ({round(row['distance'], 4)})")
-
-        st.info(f"⏱️ Time Taken: MiniLM = {time_minilm:.2f}s | Paraphrase-MiniLM = {time_para:.2f}s")
-    else:
-        st.warning("Please enter a query to compare models.")
+        st.success(f"MiniLM took {t1:.2f}s | Paraphrase-MiniLM took {t2:.2f}s")
