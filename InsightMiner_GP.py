@@ -72,7 +72,7 @@ if menu == "🔍 Search Papers":
 
                     for i, query_emb in enumerate(query_embeddings):
                         D, I = index.search(np.array([query_emb]), k=top_k)
-                        batch = filtered_df.iloc[I[0]].copy()
+                        batch = df.iloc[I[0]].copy()
                         batch['distance'] = D[0]
                         batch['query'] = queries[i]
                         results.append(batch)
